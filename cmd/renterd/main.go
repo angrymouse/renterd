@@ -75,6 +75,12 @@ func main() {
 		return
 	}
 
+	closer, err := initTracer()
+	if err != nil {
+		log.Fatal("failed to initilaize tracer", err)
+	}
+	defer closer.Close()
+
 	if *stateless {
 		apiPassword := getAPIPassword()
 		l, err := net.Listen("tcp", *apiAddr)

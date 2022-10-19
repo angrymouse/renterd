@@ -21,7 +21,10 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.6 // indirect
+	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/uber/jaeger-client-go v2.30.0+incompatible // indirect
+	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	gitlab.com/NebulousLabs/bolt v1.4.4 // indirect
 	gitlab.com/NebulousLabs/demotemutex v0.0.0-20151003192217-235395f71c40 // indirect
 	gitlab.com/NebulousLabs/entropy-mnemonics v0.0.0-20181018051301-7532f67e3500 // indirect
@@ -35,6 +38,7 @@ require (
 	gitlab.com/NebulousLabs/ratelimit v0.0.0-20200811080431-99b8f0768b2e // indirect
 	gitlab.com/NebulousLabs/siamux v0.0.0-20210409140711-e667c5f458e4 // indirect
 	gitlab.com/NebulousLabs/threadgroup v0.0.0-20200608151952-38921fbef213 // indirect
+	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/text v0.3.6 // indirect
 )

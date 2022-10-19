@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/opentracing/opentracing-go"
 	"go.sia.tech/renterd/internal/consensus"
 	rhpv2 "go.sia.tech/renterd/rhp/v2"
 )
@@ -18,10 +19,15 @@ type Host interface {
 }
 
 // parallelUploadSlab uploads the provided shards in parallel.
-func parallelUploadSlab(shards [][]byte, hosts []Host) ([]Sector, error) {
+func parallelUploadSlab(span opentracing.Span, shards [][]byte, hosts []Host) ([]Sector, error) {
 	if len(hosts) < len(shards) {
 		return nil, errors.New("fewer hosts than shards")
 	}
+
+	tracer := opentracing.GlobalTracer()
+	opts := opentracing.ChildOf(span.Context())
+	childSpan := tracer.StartSpan("parallelUploadSlab", opts)
+	defer childSpan.Finish()
 
 	type req struct {
 		host       Host
@@ -37,8 +43,12 @@ func parallelUploadSlab(shards [][]byte, hosts []Host) ([]Sector, error) {
 	respChan := make(chan resp, len(shards))
 	worker := func() {
 		for req := range reqChan {
+			opts := opentracing.ChildOf(childSpan.Context())
+			reqSpan := opentracing.GlobalTracer().StartSpan("UploadSector", opts)
+			reqSpan.SetTag("host", req.host.PublicKey())
 			root, err := req.host.UploadSector((*[rhpv2.SectorSize]byte)(shards[req.shardIndex]))
 			respChan <- resp{req, root, err}
+			reqSpan.Finish()
 		}
 	}
 
@@ -82,28 +92,49 @@ func parallelUploadSlab(shards [][]byte, hosts []Host) ([]Sector, error) {
 
 // UploadSlabs uploads slabs read from the provided Reader.
 func UploadSlabs(r io.Reader, m, n uint8, hosts []Host) ([]Slab, error) {
+	tracer := opentracing.GlobalTracer()
+	span := tracer.StartSpan("UploadSlabs")
+	span.SetTag("MinShards", m)
+	span.SetTag("NumShards", n)
+	defer span.Finish()
+
 	buf := make([]byte, int(m)*rhpv2.SectorSize)
 	shards := make([][]byte, n)
 	var slabs []Slab
 	for {
-		// read slab data, encode, and encrypt
-		_, err := io.ReadFull(r, buf)
+		err := func() error {
+			opts := opentracing.ChildOf(span.Context())
+			childSpan := tracer.StartSpan("UploadSlab", opts)
+			defer childSpan.Finish()
+
+			// read slab data, encode, and encrypt
+			_, err := io.ReadFull(r, buf)
+			if err != nil && err != io.ErrUnexpectedEOF {
+				return err
+			}
+
+			s := Slab{
+				Key:       GenerateEncryptionKey(),
+				MinShards: m,
+			}
+
+			s.Encode(buf, shards)
+			s.Encrypt(shards)
+			s.Shards, err = parallelUploadSlab(childSpan, shards, hosts)
+			if err != nil {
+				childSpan.LogKV("err", err)
+				return err
+			}
+			slabs = append(slabs, s)
+			return nil
+		}()
+
 		if err == io.EOF {
 			break
 		} else if err != nil && err != io.ErrUnexpectedEOF {
 			return nil, err
 		}
-		s := Slab{
-			Key:       GenerateEncryptionKey(),
-			MinShards: m,
-		}
-		s.Encode(buf, shards)
-		s.Encrypt(shards)
-		s.Shards, err = parallelUploadSlab(shards, hosts)
-		if err != nil {
-			return nil, err
-		}
-		slabs = append(slabs, s)
+
 	}
 	return slabs, nil
 }
@@ -136,10 +167,15 @@ func slabsForDownload(slabs []Slice, offset, length int64) []Slice {
 }
 
 // parallelDownloadSlab downloads the shards comprising a slab in parallel.
-func parallelDownloadSlab(s Slice, hosts []Host) ([][]byte, error) {
+func parallelDownloadSlab(span opentracing.Span, s Slice, hosts []Host) ([][]byte, error) {
 	if len(hosts) < int(s.MinShards) {
 		return nil, errors.New("not enough hosts to recover shard")
 	}
+
+	tracer := opentracing.GlobalTracer()
+	opts := opentracing.ChildOf(span.Context())
+	childSpan := tracer.StartSpan("parallelDownloadSlab", opts)
+	defer childSpan.Finish()
 
 	type req struct {
 		hostIndex int
@@ -166,10 +202,16 @@ func parallelDownloadSlab(s Slice, hosts []Host) ([][]byte, error) {
 				respChan <- resp{req, nil, errors.New("slab is not stored on this host")}
 				continue
 			}
+
+			opts := opentracing.ChildOf(childSpan.Context())
+			reqSpan := opentracing.GlobalTracer().StartSpan("DownloadSector", opts)
+			reqSpan.SetTag("host", shard.Host.String())
+
 			offset, length := s.SectorRegion()
 			var buf bytes.Buffer
 			err := h.DownloadSector(&buf, shard.Root, offset, length)
 			respChan <- resp{req, buf.Bytes(), err}
+			reqSpan.Finish()
 		}
 	}
 
@@ -215,6 +257,11 @@ func parallelDownloadSlab(s Slice, hosts []Host) ([][]byte, error) {
 
 // DownloadSlabs downloads data from the supplied slabs.
 func DownloadSlabs(w io.Writer, slabs []Slice, offset, length int64, hosts []Host) error {
+	span := opentracing.GlobalTracer().StartSpan("DownloadSlabs")
+	span.SetTag("offset", offset)
+	span.SetTag("length", length)
+	defer span.Finish()
+
 	var slabsSize int64
 	for _, ss := range slabs {
 		slabsSize += int64(ss.Length)
@@ -227,7 +274,7 @@ func DownloadSlabs(w io.Writer, slabs []Slice, offset, length int64, hosts []Hos
 
 	slabs = slabsForDownload(slabs, offset, length)
 	for _, ss := range slabs {
-		shards, err := parallelDownloadSlab(ss, hosts)
+		shards, err := parallelDownloadSlab(span, ss, hosts)
 		if err != nil {
 			return err
 		}
@@ -290,9 +337,12 @@ outer:
 		return errors.New("not enough hosts to migrate shard")
 	}
 
+	span := opentracing.GlobalTracer().StartSpan("serialMigrateSlab")
+	defer span.Finish()
+
 	// download + reconstruct slab
 	ss := Slice{*s, 0, uint32(s.MinShards) * rhpv2.SectorSize}
-	shards, err := parallelDownloadSlab(ss, from)
+	shards, err := parallelDownloadSlab(span, ss, from)
 	if err != nil {
 		return err
 	}
