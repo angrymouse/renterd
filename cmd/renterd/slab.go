@@ -12,7 +12,7 @@ type slabMover struct {
 	pool *slab.SessionPool
 }
 
-func (sm slabMover) withHosts(ctx context.Context, contracts []api.Contract, fn func([]slab.Host) error) (err error) {
+func (sm slabMover) withHosts(ctx context.Context, contracts []api.Contract, fn func(context.Context, []slab.Host) error) (err error) {
 	var hosts []slab.Host
 	for _, c := range contracts {
 		h := sm.pool.Session(c.HostKey, c.HostIP, c.ID, c.RenterKey)
@@ -35,26 +35,26 @@ func (sm slabMover) withHosts(ctx context.Context, contracts []api.Contract, fn 
 			err = ctx.Err()
 		}
 	}()
-	return fn(hosts)
+	return fn(ctx, hosts)
 }
 
 func (sm slabMover) UploadSlabs(ctx context.Context, r io.Reader, m, n uint8, currentHeight uint64, contracts []api.Contract) (slabs []slab.Slab, err error) {
 	sm.pool.SetCurrentHeight(currentHeight)
-	err = sm.withHosts(ctx, contracts, func(hosts []slab.Host) error {
-		slabs, err = slab.UploadSlabs(r, m, n, hosts)
+	err = sm.withHosts(ctx, contracts, func(ctx context.Context, hosts []slab.Host) error {
+		slabs, err = slab.UploadSlabs(ctx, r, m, n, hosts)
 		return err
 	})
 	return
 }
 
 func (sm slabMover) DownloadSlabs(ctx context.Context, w io.Writer, slabs []slab.Slice, offset, length int64, contracts []api.Contract) error {
-	return sm.withHosts(ctx, contracts, func(hosts []slab.Host) error {
-		return slab.DownloadSlabs(w, slabs, offset, length, hosts)
+	return sm.withHosts(ctx, contracts, func(ctx context.Context, hosts []slab.Host) error {
+		return slab.DownloadSlabs(ctx, w, slabs, offset, length, hosts)
 	})
 }
 
 func (sm slabMover) DeleteSlabs(ctx context.Context, slabs []slab.Slab, contracts []api.Contract) error {
-	return sm.withHosts(ctx, contracts, func(hosts []slab.Host) error {
+	return sm.withHosts(ctx, contracts, func(ctx context.Context, hosts []slab.Host) error {
 		return slab.DeleteSlabs(slabs, hosts)
 	})
 }

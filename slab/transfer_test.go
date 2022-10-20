@@ -2,6 +2,7 @@ package slab_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestSlabs(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		hosts = append(hosts, slabutil.NewMockHost())
 	}
-	slabs, err := slab.UploadSlabs(bytes.NewReader(data), 3, 10, hosts)
+	slabs, err := slab.UploadSlabs(context.Background(), bytes.NewReader(data), 3, 10, hosts)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(slabs) != 1 {
@@ -36,7 +37,7 @@ func TestSlabs(t *testing.T) {
 	checkDownload := func(offset, length int) {
 		t.Helper()
 		var buf bytes.Buffer
-		if err := slab.DownloadSlabs(&buf, ss, int64(offset), int64(length), hosts); err != nil {
+		if err := slab.DownloadSlabs(context.Background(), &buf, ss, int64(offset), int64(length), hosts); err != nil {
 			t.Error(err)
 			return
 		}
@@ -65,7 +66,7 @@ func TestSlabs(t *testing.T) {
 	checkDownloadFail := func(offset, length int) {
 		t.Helper()
 		var buf bytes.Buffer
-		if err := slab.DownloadSlabs(&buf, ss, int64(offset), int64(length), hosts); err == nil {
+		if err := slab.DownloadSlabs(context.Background(), &buf, ss, int64(offset), int64(length), hosts); err == nil {
 			t.Error("expected error, got nil")
 		}
 	}

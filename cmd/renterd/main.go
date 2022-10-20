@@ -9,6 +9,7 @@ import (
 	"os/signal"
 
 	"go.sia.tech/renterd/internal/consensus"
+	"go.sia.tech/renterd/internal/tracing"
 	"go.sia.tech/renterd/wallet"
 	"golang.org/x/term"
 )
@@ -75,11 +76,15 @@ func main() {
 		return
 	}
 
-	closer, err := initTracer()
+	closeFn, err := tracing.InitTracer("renterd", "http://localhost:14268/api/traces")
 	if err != nil {
 		log.Fatal("failed to initilaize tracer", err)
 	}
-	defer closer.Close()
+	defer func() {
+		if err := closeFn(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	if *stateless {
 		apiPassword := getAPIPassword()

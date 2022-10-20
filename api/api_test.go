@@ -96,11 +96,11 @@ type mockSlabMover struct {
 }
 
 func (sm *mockSlabMover) UploadSlabs(ctx context.Context, r io.Reader, m, n uint8, currentHeight uint64, contracts []api.Contract) ([]slab.Slab, error) {
-	return slab.UploadSlabs(r, m, n, sm.hosts)
+	return slab.UploadSlabs(context.Background(), r, m, n, sm.hosts)
 }
 
 func (sm *mockSlabMover) DownloadSlabs(ctx context.Context, w io.Writer, slabs []slab.Slice, offset, length int64, contracts []api.Contract) error {
-	return slab.DownloadSlabs(w, slabs, offset, length, sm.hosts)
+	return slab.DownloadSlabs(context.Background(), w, slabs, offset, length, sm.hosts)
 }
 
 func (sm *mockSlabMover) DeleteSlabs(ctx context.Context, slabs []slab.Slab, contracts []api.Contract) error {
