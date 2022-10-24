@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -190,6 +191,59 @@ func (s *server) walletFundHandler(jc jape.Context) {
 		Transaction: txn,
 		ToSign:      toSign,
 		DependsOn:   parents,
+	})
+}
+
+func (s *server) walletFragHandler(jc jape.Context) {
+	// parse request
+	var wfr WalletFragRequest
+	if jc.Decode(&wfr) != nil {
+		return
+	}
+	if wfr.Amount.Cmp(types.SiacoinPrecision) < 0 {
+		jc.Error(errors.New("'amount' has to be at least 1SC"), http.StatusBadRequest)
+		return
+	}
+
+	if wfr.Fragments == 0 {
+		jc.Error(errors.New("'fragments' has to be greater than zero"), http.StatusBadRequest)
+		return
+	}
+
+	// prepare the transaction
+	var txn types.Transaction
+	for i := 0; i < int(wfr.Fragments); i++ {
+		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
+			Value:      wfr.Amount,
+			UnlockHash: s.w.Address(),
+		})
+	}
+
+	// calculate the recommended fee
+	txn.MinerFees = []types.Currency{s.tp.RecommendedFee().Mul64(uint64(len(encoding.Marshal(txn))))}
+
+	// fund the transaction
+	toSign, err := s.w.FundTransaction(s.cm.TipState(), &txn, wfr.Amount.Mul64(wfr.Fragments).Add(txn.MinerFees[0]), s.tp.Transactions())
+	if jc.Check("couldn't fund the transaction", err) != nil {
+		return
+	}
+
+	// sign the transaction
+	err = s.w.SignTransaction(s.cm.TipState(), &txn, toSign, types.FullCoveredFields)
+	if jc.Check("couldn't sign transaction", err) != nil {
+		s.w.ReleaseInputs(txn)
+		return
+	}
+
+	// add it to the transaction set
+	err = s.tp.AddTransactionSet([]types.Transaction{txn})
+	if jc.Check("couldn't add the transaction", err) != nil {
+		s.w.ReleaseInputs(txn)
+		return
+	}
+
+	jc.Encode(WalletFragResponse{
+		Transaction: txn,
 	})
 }
 
@@ -640,6 +694,7 @@ func NewServer(s Syncer, cm ChainManager, tp TransactionPool, w Wallet, hdb Host
 		"GET    /wallet/transactions":  srv.walletTransactionsHandler,
 		"GET    /wallet/outputs":       srv.walletOutputsHandler,
 		"POST   /wallet/fund":          srv.walletFundHandler,
+		"POST /wallet/frag":            srv.walletFragHandler,
 		"POST   /wallet/sign":          srv.walletSignHandler,
 		"POST   /wallet/discard":       srv.walletDiscardHandler,
 		"POST   /wallet/prepare/form":  srv.walletPrepareFormHandler,
