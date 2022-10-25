@@ -194,9 +194,20 @@ func (s *server) walletFundHandler(jc jape.Context) {
 	})
 }
 
-func (s *server) walletFragHandler(jc jape.Context) {
+func (s *server) walletSignHandler(jc jape.Context) {
+	var wsr WalletSignRequest
+	if jc.Decode(&wsr) != nil {
+		return
+	}
+	err := s.w.SignTransaction(s.cm.TipState(), &wsr.Transaction, wsr.ToSign, wsr.CoveredFields)
+	if jc.Check("couldn't sign transaction", err) == nil {
+		jc.Encode(wsr.Transaction)
+	}
+}
+
+func (s *server) walletSplitHandler(jc jape.Context) {
 	// parse request
-	var wfr WalletFragRequest
+	var wfr WalletSplitRequest
 	if jc.Decode(&wfr) != nil {
 		return
 	}
@@ -204,15 +215,14 @@ func (s *server) walletFragHandler(jc jape.Context) {
 		jc.Error(errors.New("'amount' has to be at least 1SC"), http.StatusBadRequest)
 		return
 	}
-
-	if wfr.Fragments == 0 {
-		jc.Error(errors.New("'fragments' has to be greater than zero"), http.StatusBadRequest)
+	if wfr.Outputs == 0 {
+		jc.Error(errors.New("'outputs' has to be greater than zero"), http.StatusBadRequest)
 		return
 	}
 
-	// prepare the transaction
+	// build the transaction
 	var txn types.Transaction
-	for i := 0; i < int(wfr.Fragments); i++ {
+	for i := 0; i < int(wfr.Outputs); i++ {
 		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 			Value:      wfr.Amount,
 			UnlockHash: s.w.Address(),
@@ -223,7 +233,7 @@ func (s *server) walletFragHandler(jc jape.Context) {
 	txn.MinerFees = []types.Currency{s.tp.RecommendedFee().Mul64(uint64(len(encoding.Marshal(txn))))}
 
 	// fund the transaction
-	toSign, err := s.w.FundTransaction(s.cm.TipState(), &txn, wfr.Amount.Mul64(wfr.Fragments).Add(txn.MinerFees[0]), s.tp.Transactions())
+	toSign, err := s.w.FundTransaction(s.cm.TipState(), &txn, wfr.Amount.Mul64(uint64(wfr.Outputs)).Add(txn.MinerFees[0]), s.tp.Transactions())
 	if jc.Check("couldn't fund the transaction", err) != nil {
 		return
 	}
@@ -242,20 +252,9 @@ func (s *server) walletFragHandler(jc jape.Context) {
 		return
 	}
 
-	jc.Encode(WalletFragResponse{
+	jc.Encode(WalletSplitResponse{
 		Transaction: txn,
 	})
-}
-
-func (s *server) walletSignHandler(jc jape.Context) {
-	var wsr WalletSignRequest
-	if jc.Decode(&wsr) != nil {
-		return
-	}
-	err := s.w.SignTransaction(s.cm.TipState(), &wsr.Transaction, wsr.ToSign, wsr.CoveredFields)
-	if jc.Check("couldn't sign transaction", err) == nil {
-		jc.Encode(wsr.Transaction)
-	}
 }
 
 func (s *server) walletDiscardHandler(jc jape.Context) {
@@ -694,8 +693,8 @@ func NewServer(s Syncer, cm ChainManager, tp TransactionPool, w Wallet, hdb Host
 		"GET    /wallet/transactions":  srv.walletTransactionsHandler,
 		"GET    /wallet/outputs":       srv.walletOutputsHandler,
 		"POST   /wallet/fund":          srv.walletFundHandler,
-		"POST /wallet/frag":            srv.walletFragHandler,
 		"POST   /wallet/sign":          srv.walletSignHandler,
+		"POST   /wallet/split":         srv.walletSplitHandler,
 		"POST   /wallet/discard":       srv.walletDiscardHandler,
 		"POST   /wallet/prepare/form":  srv.walletPrepareFormHandler,
 		"POST   /wallet/prepare/renew": srv.walletPrepareRenewHandler,
