@@ -31,8 +31,8 @@ func (t *paramTime) UnmarshalText(b []byte) error { return (*time.Time)(t).Unmar
 
 // WalletSplitRequest is the request type for the /wallet/split operation.
 type WalletSplitRequest struct {
-	Outputs int            `json:"outputs"`
 	Amount  types.Currency `json:"amount"`
+	Outputs int            `json:"outputs"`
 }
 
 // WalletSplitResponse is the response type for the /wallet/split endpoint.

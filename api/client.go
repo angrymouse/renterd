@@ -105,6 +105,16 @@ func (c *Client) WalletSign(txn *types.Transaction, toSign []types.OutputID, cf 
 	return c.c.POST("/wallet/sign", req, txn)
 }
 
+// WalletSplit splits the wallet to ensure it has given number of outputs with given amount.
+func (c *Client) WalletSplit(outputs int, amount types.Currency) error {
+	req := WalletSplitRequest{
+		Amount:  amount,
+		Outputs: outputs,
+	}
+	var resp WalletSplitResponse
+	return c.c.POST("/wallet/split", req, &resp)
+}
+
 // WalletDiscard discards the provided txn, make its inputs usable again. This
 // should only be called on transactions that will never be broadcast.
 func (c *Client) WalletDiscard(txn types.Transaction) error {
