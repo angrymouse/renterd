@@ -276,13 +276,14 @@ func (w *SingleAddressWallet) Split(cs consensus.State, outputs int, amount, fee
 	if i == len(utxos)+1 {
 		return types.Transaction{}, nil, errors.New("insufficient balance")
 	}
+	utxos = utxos[:i]
 
 	// set the miner fee
-	fee := feePerInput.Mul64(uint64(i)).Add(outputFees)
+	fee := feePerInput.Mul64(uint64(len(utxos))).Add(outputFees)
 	txn.MinerFees = []types.Currency{fee}
 
 	// add the change output
-	change := SumOutputs(utxos[:i]).Sub(want.Add(fee))
+	change := SumOutputs(utxos).Sub(want.Add(fee))
 	if !change.IsZero() {
 		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 			Value:      change,
@@ -291,8 +292,8 @@ func (w *SingleAddressWallet) Split(cs consensus.State, outputs int, amount, fee
 	}
 
 	// add the inputs
-	toSign := make([]types.OutputID, i)
-	for i, sce := range utxos[:i] {
+	toSign := make([]types.OutputID, len(utxos))
+	for i, sce := range utxos {
 		txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
 			ParentID:         types.SiacoinOutputID(sce.ID),
 			UnlockConditions: StandardUnlockConditions(w.priv.PublicKey()),
