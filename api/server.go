@@ -238,22 +238,10 @@ func (s *server) walletSplitHandler(jc jape.Context) {
 		return
 	}
 
-	// sign the transaction
-	err = s.w.SignTransaction(s.cm.TipState(), &txn, toSign, types.FullCoveredFields)
-	if jc.Check("couldn't sign transaction", err) != nil {
-		s.w.ReleaseInputs(txn)
-		return
-	}
-
-	// add it to the transaction set
-	err = s.tp.AddTransactionSet([]types.Transaction{txn})
-	if jc.Check("couldn't add the transaction", err) != nil {
-		s.w.ReleaseInputs(txn)
-		return
-	}
-
 	jc.Encode(WalletSplitResponse{
-		Transaction: txn,
+		Transaction:   txn,
+		ToSign:        toSign,
+		CoveredFields: wallet.ExplicitCoveredFields(txn),
 	})
 }
 

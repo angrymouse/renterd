@@ -37,7 +37,9 @@ type WalletSplitRequest struct {
 
 // WalletSplitResponse is the response type for the /wallet/split endpoint.
 type WalletSplitResponse struct {
-	Transaction types.Transaction `json:"transaction"`
+	Transaction   types.Transaction   `json:"transaction"`
+	ToSign        []types.OutputID    `json:"toSign"`
+	CoveredFields types.CoveredFields `json:"coveredFields"`
 }
 
 // WalletFundRequest is the request type for the /wallet/fund endpoint.
