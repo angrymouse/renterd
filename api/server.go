@@ -52,6 +52,7 @@ type (
 		FundTransaction(cs consensus.State, txn *types.Transaction, amount types.Currency, pool []types.Transaction) ([]types.OutputID, error)
 		ReleaseInputs(txn types.Transaction)
 		SignTransaction(cs consensus.State, txn *types.Transaction, toSign []types.OutputID, cf types.CoveredFields) error
+		Split(cs consensus.State, outputs int, amount, feePerByte types.Currency, pool []types.Transaction) (types.Transaction, []types.OutputID, error)
 	}
 
 	// A HostDB stores information about hosts.
@@ -221,20 +222,8 @@ func (s *server) walletSplitHandler(jc jape.Context) {
 	}
 
 	// build the transaction
-	var txn types.Transaction
-	for i := 0; i < int(wfr.Outputs); i++ {
-		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
-			Value:      wfr.Amount,
-			UnlockHash: s.w.Address(),
-		})
-	}
-
-	// calculate the recommended fee
-	txn.MinerFees = []types.Currency{s.tp.RecommendedFee().Mul64(uint64(len(encoding.Marshal(txn))))}
-
-	// fund the transaction
-	toSign, err := s.w.FundTransaction(s.cm.TipState(), &txn, wfr.Amount.Mul64(uint64(wfr.Outputs)).Add(txn.MinerFees[0]), s.tp.Transactions())
-	if jc.Check("couldn't fund the transaction", err) != nil {
+	txn, toSign, err := s.w.Split(s.cm.TipState(), wfr.Outputs, wfr.Amount, s.tp.RecommendedFee(), s.tp.Transactions())
+	if jc.Check("couldn't split the wallet", err) != nil {
 		return
 	}
 
