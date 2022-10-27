@@ -207,7 +207,6 @@ func (s *server) walletSignHandler(jc jape.Context) {
 }
 
 func (s *server) walletSplitHandler(jc jape.Context) {
-	// parse request
 	var wfr WalletSplitRequest
 	if jc.Decode(&wfr) != nil {
 		return
@@ -221,7 +220,6 @@ func (s *server) walletSplitHandler(jc jape.Context) {
 		return
 	}
 
-	// build the transaction
 	txn, toSign, err := s.w.Split(s.cm.TipState(), wfr.Outputs, wfr.Amount, s.tp.RecommendedFee(), s.tp.Transactions())
 	if jc.Check("couldn't split the wallet", err) != nil {
 		return
