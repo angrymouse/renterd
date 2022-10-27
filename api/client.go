@@ -105,7 +105,9 @@ func (c *Client) WalletSign(txn *types.Transaction, toSign []types.OutputID, cf 
 	return c.c.POST("/wallet/sign", req, txn)
 }
 
-// WalletSplit splits the wallet to ensure it has given number of outputs with given amount.
+// WalletSplit returns a transaction that splits the wallet in the desired
+// number of outputs of given amount. The transaction needs to be signed and
+// then broadcasted to the network.
 func (c *Client) WalletSplit(outputs int, amount types.Currency) error {
 	req := WalletSplitRequest{
 		Amount:  amount,
