@@ -328,17 +328,11 @@ func (c *Client) SetHostSet(name string, hosts []consensus.PublicKey) (err error
 	return
 }
 
-// HostSetContracts returns the latest contract for each host in the given set,
-// or nil if no contract exists.
-func (c *Client) HostSetContracts(name string) (contracts []*rhpv2.Contract, err error) {
+// HostSetContracts returns the latest contract for each host in the given set.
+// The ID and HostIP fields may be empty, depending on whether a contract exists
+// and a host announcement is known. The RenterKey field is always empty.
+func (c *Client) HostSetContracts(name string) (contracts []Contract, err error) {
 	err = c.c.GET(fmt.Sprintf("/hostsets/%s/contracts", name), &contracts)
-	return
-}
-
-// HostSetResolves returns the last announced IP for each host in the given set,
-// or the empty string if no announcement is known.
-func (c *Client) HostSetResolves(name string) (ips []string, err error) {
-	err = c.c.GET(fmt.Sprintf("/hostsets/%s/resolve", name), &ips)
 	return
 }
 
